@@ -1,20 +1,22 @@
 
-#include <M5Core2.h>
+#include <M5StickCPlus.h> // use library specific for M5StickCPlus
 #include <Preferences.h>
 #include "ColorMap.h"
 #include "GenerateTerrain.h"
 
 
 // Display size
-#define scrX 320
-#define scrY 240
+#define scrX 240 // the long side of the screen in pixels; width in landscape mode
+#define scrY 135  // the short side; height in landscape mode
 #define topBar 20
 
 // Terrain grid
-int NcpX = 33; 
-int NcpY = 25;
+
+// coarse grid points
+int NcpX = 1 + scrX / 10; // relative to the screen size
+int NcpY = 1 + scrY / 10; 
 float cpA = 1000.0;
-uint32_t  rngNo;
+uint32_t  rngNo=1.0; //init rngNo
 int smoothPass = 5;
 float field[33][25];
 float Fx[33][25];
@@ -32,8 +34,10 @@ float accY = 0.0F;
 float accZ = 0.0F;
 float tx = 0.0F;
 float ty = 0.0F;
-float xs = 160.0F;
-float ys = 120.0F;
+
+float xs = scrX/2.0; // start in center of the screen
+float ys = scrY/2.0;
+
 float xv = 0.0F;
 float yv = 0.0F;
 int xp = 0;
@@ -74,8 +78,9 @@ long HS;
 
 
 // Intro variables
-float xm = 160;
-float ym = 120;
+float xm = scrX/2.0;
+float ym = scrX/2.0;
+
 int ncolor = 1000;
 float nx, ny;
 float scr, scg, scb;
@@ -86,10 +91,12 @@ int k = 0;
 void setup() {
   M5.begin();
   M5.IMU.Init();
-    
+
+  M5.Lcd.setRotation(1); // Adjust rotation by 90° clockwise  
   M5.Lcd.fillScreen(TFT_BLACK);
   M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
   M5.Lcd.setTextSize(2);
+
   lastR = millis();
   lastU = millis();
 
@@ -100,24 +107,31 @@ void setup() {
   ncr = random(100) / 100.0;
   ncg = random(100) / 100.0;
   ncb = random(100) / 100.0;
+
   nx = 1 + ((float)random(900))/100.0;
   ny = 1 + ((float)random(900))/100.0;
-  M5.Lcd.setCursor(10, 10);  
+  
+  M5.Lcd.setCursor(10, 10);  // Position the cursor in the first line
   M5.Lcd.println("Gradients 0.92");
-  M5.Lcd.setCursor(10, 30);  // Position the cursor in the top left corner
+  M5.Lcd.setCursor(10, 30);  // Position the cursor in the second line
   M5.Lcd.println("vlado83 2025");
-  M5.Lcd.setCursor(10, 220);  // Position the cursor in the top left corner
+  M5.Lcd.setCursor(10, 115);  // Position the cursor in the last line
   M5.Lcd.println("Press A to start");
+  
+
    while (!M5.BtnA.wasPressed()) {
     for (float t = 0; t < 100 * PI; t += 0.01) {
       M5.update(); // Update button states
       if (M5.BtnA.wasPressed()) {
         break;
       }
+      
       k++;
+      
       float ccr = scr * k / ncolor + ncr * (1 - k / ncolor);
       float ccg = scg * k / ncolor + ncg * (1 - k / ncolor);
       float ccb = scb * k / ncolor + ncb * (1 - k / ncolor);
+      
       if (k == ncolor) {
         scr = ncr;
         scg = ncg;
@@ -132,7 +146,8 @@ void setup() {
       int indY = round(ym + sin(ny * t) * sin(t) * 80);
 
       uint32_t color = M5.Lcd.color565(ccr * 255, ccg * 255, ccb * 255);
-      if (indX >= 0 && indX < 320 && indY >= 0 && indY < 240) {
+      if (indX >= 0 && indX < scrX && indY >= 0 && indY < scrY) // make screen borders flexible by scrX, scrY constants
+      {
         M5.Lcd.drawPixel(indX, indY, color);
       }
 
@@ -141,13 +156,16 @@ void setup() {
   }
  
 
+
   bck.createSprite(scrX, scrY);
   bck.fillSprite(TFT_BLACK);
   rngNo = esp_random();
+
   randomSeed(rngNo);
+
   generateTerrain();
   generateGradients();
- 
+
   // Copy sprite to scene
   scene.createSprite(scrX, scrY);
   scene.fillSprite(TFT_BLACK);
@@ -195,8 +213,8 @@ void loop()
     drag = 0.99;
     topoR = 2.0;
   }
-  tx = tx * sm -  accX * (1.0 - sm);
-  ty = ty * sm +  accY * (1.0 - sm);
+  tx = tx * sm +  accY * (1.0 - sm); // accY values relevant for wide x direction of screen; evtl. adjust sign in front of accY if reverse sense is necessary
+  ty = ty * sm +  accX * (1.0 - sm);/ / accX values relevant for height y direction of screen; evtl. adjust sign in front of accX if reverse sense is necessary
   if (tx > 1.0) tx = 1.0;
   if (tx < -1.0) tx = -1.0;
   if (ty > 1.0) ty = 1.0;
@@ -311,9 +329,12 @@ void loop()
     M5.Lcd.setTextColor(TFT_RED, TFT_BLACK);
     M5.Lcd.setTextSize(2);
     M5.Lcd.setTextDatum(MC_DATUM);
-    int tw = M5.Lcd.textWidth("GAME OVER");
-    M5.Lcd.fillRect((scrX - tw - 40) / 2, 100, tw + 40, 40, TFT_BLACK);
+
+    //int tw = M5.Lcd.textWidth("GAME OVER"); // produced an additional black bar at the bottom of the screen with no clear purpose
+    //M5.Lcd.fillRect((scrX - tw - 40) / 2, 100, tw + 40, 40, TFT_BLACK);
+
     M5.Lcd.drawString("GAME OVER", scrX / 2, scrY / 2, 2);
+    
     if (score > HS)
     {
       HS = score;
@@ -325,13 +346,18 @@ void loop()
     preferences.end();
     
   
-    while (1)
-    {;}
-    // Stuck until reset
+  // reset procedure for new game by restart of the StickCPlus
+  while(1)
+  { 
+    M5.update();
+    if (M5.BtnA.wasPressed())
+    {
+      ESP.restart();
+      delay(100);
+    }
   }
+}
 
-
- M5.update();
 }
 
 
